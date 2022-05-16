@@ -600,34 +600,3 @@ class CloseOrder(Order):
             return True
         else:
             return False
-
-
-class LosscutOrder(CloseOrder):
-    def __init__(
-            self,
-            open_order: OpenOrder,
-            *,
-            price: float = None,
-            expire_seconds: int = 1e+8,
-            market_price_key: str = 'close',
-            market_slippage: int = 0,
-            update_fn_or_price_key: Union[Callable, str] = None,
-            entry_delay_seconds: int = 0,
-            market_entry_fn: Callable[[dict, 'CloseOrder'], bool] = None,
-            force_market_entry_seconds: int = float('inf'),
-            keep_expired_orders: bool = False
-    ):
-        super().__init__(
-            open_order, ExecutionType.STOP,
-            price=price,
-            expire_seconds=expire_seconds,
-            market_price_key=market_price_key,
-            market_slippage=market_slippage,
-            market_entry_fn=market_entry_fn,
-            update_fn_or_price_key=update_fn_or_price_key,
-            entry_delay_seconds=entry_delay_seconds,
-            force_market_entry_seconds=force_market_entry_seconds,
-            keep_expired_orders=keep_expired_orders
-        )
-
-
