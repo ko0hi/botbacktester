@@ -24,6 +24,7 @@ def _read_test_df():
     """
     df = pd.read_csv(StringIO(s))
     df['timestamp'] = pd.to_datetime(df['timestamp'])
+    df.set_index("timestamp", inplace=True)
     return df
 
 
