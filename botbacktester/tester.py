@@ -6,17 +6,16 @@ import logging
 from .items import Position, Order, OpenOrder, CloseOrder
 from .enums import SettleType, OrderStatus, ExecutionType
 from .status import Status
-from .utils import convert_df_to_data, DEFAULT_EXPIRE_SECONDS, set_log_level
+from .utils import DEFAULT_EXPIRE_SECONDS, set_log_level
 
 
 class BackTester:
     def __init__(self, df, log_level=logging.DEBUG):
-        self._df = df
-        assert 'timestamp' in self._df.columns
+        assert df.index.name == "timestamp"
+        assert isinstance(df.index, pd.DatetimeIndex)
 
-        self._df['timestamp'] = pd.to_datetime(self._df['timestamp'])
-
-        self._data, self._index = convert_df_to_data(df)
+        self._df = df.sort_index().reset_index()
+        self._data = self._df.to_dict(orient='records')
         self._status = Status()
         self._order_history = []
         self._closed_positions = []
