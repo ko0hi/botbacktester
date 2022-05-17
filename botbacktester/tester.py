@@ -7,6 +7,7 @@ import logging
 
 from .items import Position, Order, OpenOrder, CloseOrder
 from .enums import SettleType, OrderStatus, ExecutionType
+from .evaluate import evaluation_set1
 from .status import Status
 from .utils import DEFAULT_EXPIRE_SECONDS, set_log_level
 
@@ -113,6 +114,11 @@ class BackTester:
         df['gain_sell'] = np.where(df.side == "SELL", df.gain, 0)
 
         return df
+
+    def report(self, **kwargs):
+        df_result = self.get_result_df()
+        evaluation_set1(df_result, **kwargs)
+        return df_result
 
     @property
     def status(self) -> Status:

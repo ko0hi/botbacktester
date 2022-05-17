@@ -56,7 +56,7 @@ def execution_time(df, settle_type, n=100, name="execution_time", time_unit='S')
     return s
 
 
-def report(df, n=100, time_unit='S', figsize=(10, 10), hspace=None, subplots_kw=None, subpanel_size_ratio=0.1, ax_kw_dict=None):
+def evaluation_set1(df, n=100, time_unit='S', figsize=(10, 10), hspace=None, subplots_kw=None, subpanel_size_ratio=0.1, ax_kw_dict=None):
     ax_kw_dict = ax_kw_dict or {}
     if subplots_kw is None:
         subplots_kw = dict(
