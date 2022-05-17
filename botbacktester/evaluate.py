@@ -4,6 +4,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.stats as stats
 
 TIME_UNITS = {"H": 3600, "M": 60, "S": 1}
 
@@ -93,3 +94,18 @@ def evaluation_set1(df, n=100, time_unit='S', figsize=(10, 10), hspace=None, sub
 
     for ax_ in axes:
         ax_.grid()
+
+
+def sampling_ptest(series, fn, ttest_popmean, sampling_num=30, sampling_ratio=0.5):
+    sample_num = int(len(series) * sampling_ratio)
+
+    samples = []
+    for i in range(sampling_num):
+        samples.append(fn(series.sample(sample_num)))
+
+
+    X = np.array(samples)
+    m, s = X.mean(axis=0), X.std(axis=0)
+    p = stats.ttest_1samp(X, ttest_popmean).pvalue
+
+    return m.mean(), s.mean(), p.mean(), sample_num
