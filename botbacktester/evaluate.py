@@ -6,6 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 
+from collections import namedtuple
+
 TIME_UNITS = {"H": 3600, "M": 60, "S": 1}
 
 
@@ -108,4 +110,6 @@ def sampling_ptest(series, fn, ttest_popmean, sampling_num=30, sampling_ratio=0.
     m, s = X.mean(axis=0), X.std(axis=0)
     p = stats.ttest_1samp(X, ttest_popmean).pvalue
 
-    return m.mean(), s.mean(), p.mean(), sample_num
+    SamplingPtestResult = namedtuple('SamplingPtestResult', ('mu', 'sigma', 'p', 'n'))
+
+    return SamplingPtestResult(m.mean(), s.mean(), p.mean(), sample_num)
