@@ -2,6 +2,7 @@ from typing import Callable
 
 import numpy as np
 import pandas as pd
+import tqdm
 import logging
 
 from .items import Position, Order, OpenOrder, CloseOrder
@@ -26,7 +27,8 @@ class BackTester:
         set_log_level(log_level)
 
     def start(self):
-        for i in range(0, len(self._data)):
+        bar = tqdm.trange(0, len(self._data))
+        for i in bar:
             self._cur_i = i
             self._on_step()
             yield i, self._data[self._cur_i]
