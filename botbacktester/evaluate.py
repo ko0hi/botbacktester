@@ -2,6 +2,7 @@
 
 """
 
+import numpy as np
 import matplotlib.pyplot as plt
 
 TIME_UNITS = {"H": 3600, "M": 60, "S": 1}
@@ -9,7 +10,8 @@ TIME_UNITS = {"H": 3600, "M": 60, "S": 1}
 
 def drawdown(df, name="drawdown"):
     assert 'gain' in df.columns
-    s = df.gain.cumsum() - df.gain.cummax()
+    s = df.gain.cumsum() - df.gain.cumsum().cummax()
+    s = np.minimum(s, 0)
     s.name = name
     return s
 
@@ -90,5 +92,4 @@ def report(df, n=100, time_unit='S', figsize=(10, 10), hspace=None, subplots_kw=
     ax.set_title("Position term")
 
     for ax_ in axes:
-        ax.grid()
-        ax.legend()
+        ax_.grid()

@@ -2,7 +2,8 @@ __version__ = '0.1.0'
 
 from . import (
     enums,
-    evaluate
+    evaluate,
+    utils
 )
 
 from .enums import Side, ExecutionType, SettleType
