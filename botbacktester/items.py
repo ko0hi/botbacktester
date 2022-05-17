@@ -1,24 +1,20 @@
 from __future__ import annotations
-from typing import Callable, Union, NamedTuple
+from typing import Callable, Union
 
-import logging
+import copy
 import itertools
 import pandas as pd
 
 from datetime import timedelta
 
 from .enums import Side, ExecutionType, SettleType, OrderStatus
-from .utils import get_logger
-
-
-# 求まるexpire_timeがテストデータに収まらないくらい先になるように十分大きい値、かつ、
-# ``pd.to_datetime``が受け付ける値である必要がある
-DEFAULT_EXPIRE_SECONDS = 1e+8
+from .utils import get_logger, DEFAULT_EXPIRE_SECONDS
 
 ID_COUNTER = itertools.count()
 
-
 DEBUG = False
+
+
 def enable_debug_print():
     global DEBUG
     DEBUG = True
@@ -32,13 +28,13 @@ def disable_debug_print():
 logger = get_logger()
 
 
-def elapsed_time(begin, end, metric='seconds'):
+def elapsed_time(begin, end, metric="seconds"):
     delta = (end - begin).seconds
-    if metric == 'seconds':
+    if metric == "seconds":
         return delta
-    elif metric == 'minutes':
+    elif metric == "minutes":
         return delta / 60
-    elif metric == 'hours':
+    elif metric == "hours":
         return delta / 3600
     else:
         raise RuntimeError(f"Unsupported: {metric}")
@@ -46,15 +42,16 @@ def elapsed_time(begin, end, metric='seconds'):
 
 def check_limit(item: dict, side: Side, price: float):
     if side == Side.BUY:
-        return item['low'] <= price
+        return item["low"] <= price
     else:
-        return item['high'] >= price
+        return item["high"] >= price
+
 
 def check_stop(item: dict, side: Side, price: float):
     if side == Side.BUY:
-        return item['high'] >= price
+        return item["high"] >= price
     else:
-        return item['low'] <= price
+        return item["low"] <= price
 
 
 class Position:
@@ -67,15 +64,20 @@ class Position:
 
     def __repr__(self):
         if self.close_order is None:
-            return f"{self.__class__.__name__}(side={self.open_order.side}, open_price={self.open_price})"
+            return (
+                f"{self.__class__.__name__}("
+                f"id={self.id}/"
+                f"side={self.side}/"
+                f"price={self.open_price})"
+            )
         else:
-            return f"{self.__class__.__name__}(id={self._id}/" \
-                   f"side={self.open_order.side}/" \
-                   f"is_closed={self.is_closed}/" \
-                   f"gain={self.gain:.3f}/" \
-                   f"total_time={self.total_execution_time()}(" \
-                   f"{self.open_execution_time()}/{self.close_execution_time()}))"
-
+            return (
+                f"{self.__class__.__name__}("
+                f"id={self._id}/"
+                f"side={self.side}/"
+                f"price={self.open_price},{self.close_price}/"
+                f"gain={self.gain:.3f}/)"
+            )
 
     def set_closing_order(self, closing_order: CloseOrder):
         self.closing_order = closing_order
@@ -83,7 +85,7 @@ class Position:
     def clear_closing_order(self):
         self.closing_order = None
 
-    def close(self, item: dict, close_order: 'CloseOrder'):
+    def close(self, item: dict, close_order: "CloseOrder"):
         # 約定した場合 or シミュレーションが終了した場合に呼ばれる。
         # 後者の場合、cur・close_orderともに最後のものが入れられる。
         self.close_item = item
@@ -91,11 +93,11 @@ class Position:
 
     def as_dict(self):
         d = {}
-        d.update({f'oo_{k}': v for (k, v) in self.open_order.as_dict().items()})
+        d.update({f"oo_{k}": v for (k, v) in self.open_order.as_dict().items()})
         if self.close_order is not None:
-            d.update({f'co_{k}': v for (k, v) in self.close_order.as_dict().items()})
+            d.update({f"co_{k}": v for (k, v) in self.close_order.as_dict().items()})
 
-        d['gain'] = self.gain
+        d["gain"] = self.gain
 
         return d
 
@@ -132,7 +134,7 @@ class Position:
             return self.close_order.price
         else:
             # closeされなかった場合は最終アイテムで計算される
-            return self.close_item['close']
+            return self.close_item["close"]
 
     @property
     def is_closing(self):
@@ -146,39 +148,34 @@ class Position:
     def open_item(self):
         return self.open_order.executed_item
 
-    def open_execution_time(self, unit='seconds'):
+    def open_execution_time(self, unit="seconds"):
         return self.open_order.execution_time(unit)
 
-    def close_execution_time(self, unit='seconds'):
+    def close_execution_time(self, unit="seconds"):
         if self.is_closed:
             # 決済された場合は決済注文の約定時間
             return self.close_order.execution_time(unit)
         else:
             # 決済されなかった場合は決済注文の発注時間から最後のseriesまで。
-            return elapsed_time(
-                self.close_order.entry_time, self.close_item.name
-            )
+            return elapsed_time(self.close_order.entry_time, self.close_item.name)
 
-    def total_execution_time(self, unit='seconds'):
-        return elapsed_time(
-            self.open_order.entry_time, self.close_item['timestamp']
-        )
-
+    def total_execution_time(self, unit="seconds"):
+        return elapsed_time(self.open_order.entry_time, self.close_item["timestamp"])
 
 
 class Order:
     def __init__(
-            self,
-            side: Side,
-            exec_type: ExecutionType,
-            settle_type: SettleType,
-            *,
-            price: float = None,
-            size: int = 1,
-            entry_time: 'datetime.datetime' = None,
-            expire_seconds: int = float('inf'),
-            market_price_key: str = 'open',
-            market_slippage: int = 0
+        self,
+        side: Side,
+        exec_type: ExecutionType,
+        settle_type: SettleType,
+        *,
+        price: float = None,
+        size: int = 1,
+        entry_time: Union["pd.Timestamp", str] = None,
+        expire_seconds: int = float("inf"),
+        market_price_key: str = "open",
+        market_slippage: int = 0,
     ):
         # イベント管理用の変数なのでprotectedにしておく
         self._executed_item = None
@@ -206,7 +203,9 @@ class Order:
         self.settle_type = settle_type
 
         if self.exec_type == ExecutionType.LIMIT:
-            assert price is not None, f"``price`` is required when exec_type={ExecutionType.LIMIT}"
+            assert (
+                price is not None
+            ), f"``price`` is required when exec_type={ExecutionType.LIMIT}"
         self.price = price
 
         self.size = size
@@ -215,16 +214,18 @@ class Order:
         self.market_slippage = market_slippage
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(id={self._id}/" \
-               f"entry_at={self.entried_at}/" \
-               f"expired_at={self.expired_at}/" \
-               f"price={self.price}/" \
-               f"side={self.side}/" \
-               f"exec_type={self.exec_type}/" \
-               f"executed={self.is_executed}/" \
-               f"expired={self.is_expired})"
+        return (
+            f"{self.__class__.__name__}(id={self._id}/"
+            f"entry_at={self.entried_at}/"
+            f"expired_at={self.expired_at}/"
+            f"price={self.price}/"
+            f"side={self.side}/"
+            f"exec_type={self.exec_type}/"
+            f"executed={self.is_executed}/"
+            f"expired={self.is_expired})"
+        )
 
-    def execution_time(self, metric='seconds'):
+    def execution_time(self, metric="seconds"):
         if self.is_executed:
             return elapsed_time(self.entry_time, self.executed_at, metric)
         else:
@@ -242,7 +243,7 @@ class Order:
             "entried_at": self.entried_at,
             "executed_at": self.executed_at,
             "expired_at": self.expired_at,
-            "fee": self.fee
+            "fee": self.fee,
         }
 
     @property
@@ -259,7 +260,11 @@ class Order:
 
     @property
     def is_executed(self):
-        return self._status in [OrderStatus.EXECUTED, OrderStatus.EXPIRED_EXECUTED, OrderStatus.LOSSCUT]
+        return self._status in [
+            OrderStatus.EXECUTED,
+            OrderStatus.EXPIRED_EXECUTED,
+            OrderStatus.LOSSCUT,
+        ]
 
     @property
     def executed_item(self):
@@ -300,16 +305,16 @@ class Order:
     @property
     def executed_at(self) -> pd.Timestamp:
         if self._executed_item is not None:
-            return self._executed_item['timestamp']
+            return self._executed_item["timestamp"]
 
     @property
     def expired_at(self) -> pd.Timestamp:
         if self._expired_item is not None:
-            return self._expired_item['timestamp']
+            return self._expired_item["timestamp"]
 
     @classmethod
     def _validate_item(cls, item):
-        assert isinstance(item['timestamp'], pd.Timestamp)
+        assert isinstance(item["timestamp"], pd.Timestamp)
 
     def _on_step(self, item: dict):
         raise NotImplementedError
@@ -337,7 +342,7 @@ class Order:
         self._validate_item(item)
 
         if self.exec_type == ExecutionType.MARKET:
-            assert item['timestamp'] >= self._entry_time
+            assert item["timestamp"] >= self._entry_time
             return True
 
         elif self.exec_type == ExecutionType.LIMIT:
@@ -351,11 +356,11 @@ class Order:
 
     def _check_expiration(self, item: dict):
         self._validate_item(item)
-        logger.debug(f"[CHECK EXPIRATION] cur={item['timestamp']} vs. expire_time={self.expire_time}")
-        return item['timestamp'] >= self.expire_time
+        logger.debug(f"[CHECK EXPIRATION] {item['timestamp']} > {self.expire_time}")
+        return item["timestamp"] >= self.expire_time
 
     def _set_entry_and_expire_time(self, entry_time: Union[str, pd.Timestamp]):
-        """ エントリー時間と失効時間をセットする。
+        """エントリー時間と失効時間をセットする。
 
         :param entry_time: str or datetime
         :return:
@@ -371,9 +376,9 @@ class Order:
         if market_price_key == "best":
             assert "bid" in item and "ask" in item
             if self.side == Side.BUY:
-                return item['ask'] + self.market_slippage
+                return item["ask"] + self.market_slippage
             else:
-                return item['bid'] - self.market_slippage
+                return item["bid"] - self.market_slippage
         else:
             assert market_price_key in item
             if self.side == Side.BUY:
@@ -384,22 +389,24 @@ class Order:
 
 class OpenOrder(Order):
     def __init__(
-            self,
-            entry_time,
-            side: Side,
-            exec_type: ExecutionType,
-            price: float = None,
-            expire_seconds: int = DEFAULT_EXPIRE_SECONDS,
-            market_price_key: str = 'open',
-            market_slippage: int = 0
+        self,
+        entry_time,
+        side: Side,
+        exec_type: ExecutionType,
+        price: float = None,
+        expire_seconds: int = DEFAULT_EXPIRE_SECONDS,
+        market_price_key: str = "open",
+        market_slippage: int = 0,
     ):
         super().__init__(
-            side, exec_type, SettleType.OPEN,
+            side,
+            exec_type,
+            SettleType.OPEN,
             price=price,
             entry_time=entry_time,
             expire_seconds=expire_seconds,
             market_price_key=market_price_key,
-            market_slippage=market_slippage
+            market_slippage=market_slippage,
         )
 
     def _on_step(self, cur: dict):
@@ -414,52 +421,42 @@ class OpenOrder(Order):
 
 class CloseOrder(Order):
     def __init__(
-            self,
-            entry_time: Union[str, pd.Timestamp],
-            position: Position,
-            exec_type: ExecutionType,
-
-            *,
-
-            # 指値。
-            # ``expire_seconds``の指定がない場合、シミュレーション終了までこの与えられた
-            # 値で待ち続ける。
-            # ``expire_seconds``の指定がある場合、``update_fn_or_price_key``に従っ
-            # て失効するたびに更新されていく。
-            price: float = None,
-
-            losscut_price: float = None,
-
-            # entry後から何秒後に失効するか
-            expire_seconds: int = DEFAULT_EXPIRE_SECONDS,
-
-            market_price_key: str = 'open',
-            market_slippage: int = 0,
-
-            # priceを動的に定めるためのもの。以下のいずれかである必要がある。
-            # functionの場合: Callable[dict, CloseOrder]
-            # keyの場合: dict[key]
-            # （``expire_seconds``が指定、かつ、``exec_type``がMARKETでない場合必須）
-            update_fn_or_price_key: Callable[[dict, 'CloseOrder'], None] = None,
-
-            # OpenOrderが約定したタイミングからCloseOrderを出すまでの待ち時間。
-            # default(0)ではOpenOrderが約定したタイミングでCloseOrderをエントリーする。
-            # ただしCloseOrderが評価されるのは次の時刻からである。
-            entry_delay_seconds: int = 0,
-
-            # 成行決済の判定器。``exec_type``がMARKETの場合は以下のロジックで執行される。
-            # 1. ``makert_entry_fn``がNoneの場合：``entry_delay_seconds``経過後、
-            # その次のタイミングで執行。ただし、``entry_delay_seconds > expire_seconds``
-            # の場合、``expire_seconds``経過時に執行。
-            # 2. ``market_entry_fn``が与えられた場合：``entry_delay_seconds``待った
-            # 後、``expire_seconds``が経過するまで、``market_entry_fn``で成行注文の
-            # 可否を判定する。Trueが返ってきたタイミング or ``expire_seconds``経過時に
-            # 執行。
-            market_entry_fn: Callable[[dict, 'CloseOrder'], bool] = None,
-
-            force_market_entry_seconds: int = float('inf'),
-
-            keep_expired_orders: bool = False
+        self,
+        entry_time: Union[str, pd.Timestamp],
+        position: Position,
+        exec_type: ExecutionType,
+        *,
+        # 指値。
+        # ``expire_seconds``の指定がない場合、シミュレーション終了までこの与えられた
+        # 値で待ち続ける。
+        # ``expire_seconds``の指定がある場合、``update_fn_or_price_key``に従っ
+        # て失効するたびに更新されていく。
+        price: float = None,
+        losscut_price: float = None,
+        # entry後から何秒後に失効するか
+        expire_seconds: int = DEFAULT_EXPIRE_SECONDS,
+        market_price_key: str = "open",
+        market_slippage: int = 0,
+        # priceを動的に定めるためのもの。以下のいずれかである必要がある。
+        # functionの場合: Callable[dict, CloseOrder]
+        # keyの場合: dict[key]
+        # （``expire_seconds``が指定、かつ、``exec_type``がMARKETでない場合必須）
+        update_fn_or_price_key: Callable[[dict, "CloseOrder"], None] = None,
+        # OpenOrderが約定したタイミングからCloseOrderを出すまでの待ち時間。
+        # default(0)ではOpenOrderが約定したタイミングでCloseOrderをエントリーする。
+        # ただしCloseOrderが評価されるのは次の時刻からである。
+        entry_delay_seconds: int = 0,
+        # 成行決済の判定器。``exec_type``がMARKETの場合は以下のロジックで執行される。
+        # 1. ``makert_entry_fn``がNoneの場合：``entry_delay_seconds``経過後、
+        # その次のタイミングで執行。ただし、``entry_delay_seconds > expire_seconds``
+        # の場合、``expire_seconds``経過時に執行。
+        # 2. ``market_entry_fn``が与えられた場合：``entry_delay_seconds``待った
+        # 後、``expire_seconds``が経過するまで、``market_entry_fn``で成行注文の
+        # 可否を判定する。Trueが返ってきたタイミング or ``expire_seconds``経過時に
+        # 執行。
+        market_entry_fn: Callable[[dict, "CloseOrder"], bool] = None,
+        force_market_entry_seconds: int = float("inf"),
+        keep_expired_orders: bool = False,
     ):
         # if (
         #         expire_seconds < DEFAULT_EXPIRE_SECONDS and
@@ -472,13 +469,13 @@ class CloseOrder(Order):
         #     )
 
         if (
-                price is None and
-                exec_type != ExecutionType.MARKET and
-                update_fn_or_price_key is None
+            price is None
+            and exec_type != ExecutionType.MARKET
+            and update_fn_or_price_key is None
         ):
             raise RuntimeError(
-                f"``update_fn_or_price_key`` is requrired when ``price`` is "
-                f"not specified and ``exec_type`` is not MARKET."
+                "``update_fn_or_price_key`` is requrired when ``price`` is "
+                "not specified and ``exec_type`` is not MARKET."
             )
 
         super().__init__(
@@ -489,7 +486,7 @@ class CloseOrder(Order):
             price=price,
             expire_seconds=expire_seconds,
             market_price_key=market_price_key,
-            market_slippage=market_slippage
+            market_slippage=market_slippage,
         )
         self._position: Position = position
         # このCloseOrderへのポインターをセット
@@ -504,7 +501,6 @@ class CloseOrder(Order):
         self._expired_orders = []
         self._keep_expired_orders = keep_expired_orders
 
-
     def _on_step(self, item: dict):
         assert self._position is not None, "Missing ``position``"
         assert self.entry_time is not None, "Missing ``entry_time``"
@@ -514,7 +510,7 @@ class CloseOrder(Order):
                 self._losscut(item)
                 return
 
-        if item['timestamp'] <= self.entry_time:
+        if item["timestamp"] <= self.entry_time:
             # entry wait中
             return
 
@@ -523,7 +519,11 @@ class CloseOrder(Order):
 
         # 成行注文時に判定用関数が与えられている場合上書きする。主に``is_executed``をFalseに書き換える。（i.e., 待機時間は終了し
         # ていても条件を"満たさなければ"執行しない）。
-        if is_executed and self.exec_type == ExecutionType.MARKET and self._market_entry_fn is not None:
+        if (
+            is_executed
+            and self.exec_type == ExecutionType.MARKET
+            and self._market_entry_fn is not None
+        ):
             is_executed = self._market_entry_fn(item, self)
 
         if is_executed:
@@ -545,14 +545,16 @@ class CloseOrder(Order):
                         self._expired_and_executed(item)
                     else:
                         # 指値注文の場合は失効時に更新
-                        is_updated = self._update(item)
+                        self._update(item)
 
     def cancel(self):
         super().cancel()
         self._position.clear_closing_order()
 
     def _executed(self, item, *, force_market=False, market_price_key=None):
-        super()._executed(item, force_market=force_market, market_price_key=market_price_key)
+        super()._executed(
+            item, force_market=force_market, market_price_key=market_price_key
+        )
         self._position.close(item, self)
         self._position.clear_closing_order()
 
@@ -570,11 +572,9 @@ class CloseOrder(Order):
         self._executed(item, force_market=True, market_price_key=market_price_key)
         self._status = OrderStatus.EXPIRED_EXECUTED
 
-    def execution_time(self, metric='seconds'):
+    def execution_time(self, metric="seconds"):
         if self.is_executed:
-            return elapsed_time(
-                self._initial_entry_time, self.executed_at, metric
-            )
+            return elapsed_time(self._initial_entry_time, self.executed_at, metric)
         else:
             return None
 
@@ -612,16 +612,22 @@ class CloseOrder(Order):
         self._expired_item = None
 
         # ``entry_time``を失効タイミングで上書きして、さらに失効タイミングを延長
-        self._set_entry_and_expire_time(item['timestamp'])
+        self._set_entry_and_expire_time(item["timestamp"])
 
         self._status = OrderStatus.ORDERING
 
         logger.debug(f"[EXTEND ORDER] {self}")
 
     def __need_force_market_entry(self, item):
-        if (item['timestamp'] - self._initial_entry_time).seconds > self._force_market_entry_seconds:
+        if (
+            item["timestamp"] - self._initial_entry_time
+        ).seconds > self._force_market_entry_seconds:
             return True
-        elif self.exec_type == ExecutionType.LIMIT and self._market_entry_fn is not None and self._market_entry_fn(item, self):
+        elif (
+            self.exec_type == ExecutionType.LIMIT
+            and self._market_entry_fn is not None
+            and self._market_entry_fn(item, self)
+        ):
             return True
         else:
             return False

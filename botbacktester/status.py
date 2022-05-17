@@ -1,10 +1,6 @@
 from __future__ import annotations
-from typing import NamedTuple, TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from .items import Order, OpenOrder, CloseOrder, Position
-
-from .items import SettleType, OpenOrder, CloseOrder
+from .items import Order, Position
 
 
 class OrderSet:
@@ -18,7 +14,6 @@ class OrderSet:
 
     def set_close_order(self, co):
         self._close_order = co
-
 
 
 class Status:
@@ -77,7 +72,6 @@ class Status:
             if exec_type and o.exec_type != exec_type:
                 continue
 
-
             rtn_orders.append(o)
 
         return rtn_orders
@@ -107,4 +101,3 @@ class Status:
     @property
     def position_num(self):
         return len(self._positions)
-

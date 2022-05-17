@@ -1,10 +1,7 @@
-__version__ = '0.1.0'
+__version__ = "0.1.0"
 
-from . import (
-    enums,
-    evaluate,
-    utils
-)
+from . import enums, evaluate, utils
 
-from .enums import Side, ExecutionType, SettleType
 from .tester import BackTester
+
+__all__ = ["enums", "evaluate", "utils", "BackTester"]

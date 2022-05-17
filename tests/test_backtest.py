@@ -6,7 +6,6 @@ import botbacktester as bbt
 import botbacktester.enums as E
 
 
-
 def _read_test_df():
     s = """timestamp,openTime,open,high,low,close,volume
     2021-04-16 20:59:00,1618606800000,6752008.0,6759609.0,6752008.0,6757588.0,11.1
@@ -23,7 +22,7 @@ def _read_test_df():
     2021-04-16 21:10:00,1618607400000,6763890.0,6764382.0,6760790.0,6762843.0,1.82
     """
     df = pd.read_csv(StringIO(s))
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
     df.set_index("timestamp", inplace=True)
     return df
 
@@ -37,7 +36,7 @@ def test_limit1():
         orders = tester.orders()
         positions = tester.positions(non_closing=True)
 
-        ts = item['timestamp']
+        ts = item["timestamp"]
 
         if ts.minute < 5:
             assert len(orders) == 0
@@ -84,8 +83,6 @@ def test_limit1():
             assert tester.status.cum_gain == 0
             assert len(tester.closed_positions) == 0
 
-
-
             o = orders[0]
             assert o.status == E.OrderStatus.ORDERING
 
@@ -100,7 +97,6 @@ def test_limit1():
             assert tester.status.cum_gain == 0
             assert len(tester.closed_positions) == 0
 
-
             p = positions[0]
             o = p.open_order
 
@@ -110,7 +106,7 @@ def test_limit1():
             assert o.status == E.OrderStatus.EXECUTED
             assert o.is_executed
             assert o.executed_at.minute == 7
-            assert str(o.executed_item['timestamp']) == "2021-04-16 21:07:00"
+            assert str(o.executed_item["timestamp"]) == "2021-04-16 21:07:00"
 
             tester.exit(p, E.ExecutionType.LIMIT, price=exit_price)
 
@@ -138,7 +134,6 @@ def test_limit1():
             assert not p.is_closed
             assert p.closing_order.id == o.id
 
-
         elif ts.minute == 9:
             # close executed
 
@@ -165,12 +160,17 @@ def test_open_order_expire1():
     tester = bbt.BackTester(_read_test_df())
 
     for i, item in tester.start():
-        ts = item['timestamp']
+        ts = item["timestamp"]
 
         orders = tester.orders()
 
         if ts.minute == 3:
-            o = tester.entry(E.Side.BUY, E.ExecutionType.LIMIT, price=-float('inf'), expire_seconds=180)
+            o = tester.entry(
+                E.Side.BUY,
+                E.ExecutionType.LIMIT,
+                price=-float("inf"),
+                expire_seconds=180,
+            )
             # entry timeを含むのでexpire_secondsの設定はそこを考慮して行う必要がある
             assert str(o.expire_time) == "2021-04-16 21:06:00"
             assert o.status == E.OrderStatus.ORDERING
@@ -207,13 +207,13 @@ def test_open_order_expire2():
     tester = bbt.BackTester(_read_test_df())
 
     for i, item in tester.start():
-        ts = item['timestamp']
+        ts = item["timestamp"]
 
         orders = tester.orders()
 
         if ts.minute == 3:
             # defaultは失効しない
-            o = tester.entry(E.Side.BUY, E.ExecutionType.LIMIT, price=-float('inf'))
+            o = tester.entry(E.Side.BUY, E.ExecutionType.LIMIT, price=-float("inf"))
             assert o.status == E.OrderStatus.ORDERING
 
         elif ts.hour == 21 and ts.minute > 3:
@@ -227,13 +227,14 @@ def test_open_order_expire2():
     assert o.is_expired
     assert str(o.expired_at) == "2021-04-16 21:10:00"
 
+
 def test_close_order_expire1():
     # CloseOrderが最後まで約定しない場合は最終価格で強制決済
     tester = bbt.BackTester(_read_test_df())
     entry_price = 6763000
 
     for i, item in tester.start():
-        ts = item['timestamp']
+        ts = item["timestamp"]
 
         if ts.minute == 4:
             o = tester.entry(E.Side.SELL, E.ExecutionType.LIMIT, price=entry_price)
@@ -267,7 +268,7 @@ def test_close_order_expire1():
     assert p.open_order.entried_at.minute == 4
     assert p.close_order.entried_at.minute == 6
     assert p.close_order.status == E.OrderStatus.EXPIRED_EXECUTED
-    assert p.gain == (tester._data[-1]['close'] / entry_price - 1) * -1
+    assert p.gain == (tester._data[-1]["close"] / entry_price - 1) * -1
 
 
 def test_no_close_order_position1():
@@ -277,7 +278,7 @@ def test_no_close_order_position1():
     entry_price = 6763000
 
     for i, item in tester.start():
-        ts = item['timestamp']
+        ts = item["timestamp"]
 
         if ts.minute == 4:
             o = tester.entry(E.Side.SELL, E.ExecutionType.LIMIT, price=entry_price)
@@ -303,7 +304,7 @@ def test_no_close_order_position1():
     assert p.open_order.entried_at.minute == 4
     assert p.close_order.entried_at.minute == 10  # ここが違う
     assert p.close_order.status == E.OrderStatus.EXECUTED  # ここも違う
-    assert p.gain == (tester._data[-1]['close'] / entry_price - 1) * -1
+    assert p.gain == (tester._data[-1]["close"] / entry_price - 1) * -1
 
 
 def test_no_close_order_position2():
@@ -312,7 +313,7 @@ def test_no_close_order_position2():
     entry_price = 6763000
 
     for i, item in tester.start():
-        ts = item['timestamp']
+        ts = item["timestamp"]
 
         if ts.minute == 4:
             o = tester.entry(E.Side.SELL, E.ExecutionType.LIMIT, price=entry_price)
@@ -328,7 +329,9 @@ def test_no_close_order_position2():
             assert tester.status.position_num == 1
 
             p = tester.positions(non_closing=True)[0]
-            o = tester.exit(p, E.ExecutionType.LIMIT, price=-float("inf"), expire_seconds=120)
+            o = tester.exit(
+                p, E.ExecutionType.LIMIT, price=-float("inf"), expire_seconds=120
+            )
 
         elif ts.minute == 7:
             assert tester.status.order_num == 1
@@ -352,7 +355,7 @@ def test_no_close_order_position2():
     assert p.open_order.entried_at.minute == 4
     assert p.close_order.entried_at.minute == 10
     assert p.close_order.status == E.OrderStatus.EXECUTED
-    assert p.gain == (tester._data[-1]['close'] / entry_price - 1) * -1
+    assert p.gain == (tester._data[-1]["close"] / entry_price - 1) * -1
 
 
 def test_market1():
@@ -369,7 +372,7 @@ def test_market1():
         elif i == 6:
             assert tester.status.position_num == 1
             p = tester.positions()[0]
-            assert p.open_price == item['open']
+            assert p.open_price == item["open"]
 
         elif i == 7:
             o = tester.entry(E.Side.BUY, E.ExecutionType.MARKET, market_slippage=slip)
@@ -378,7 +381,7 @@ def test_market1():
         elif i == 8:
             assert tester.status.position_num == 2
             p = tester.positions()[1]
-            assert p.open_price == item['open'] + slip
+            assert p.open_price == item["open"] + slip
 
 
 def test_losscut1():
@@ -390,7 +393,7 @@ def test_losscut1():
     losscut_price = 6759000
 
     for i, item in tester.start():
-        ts = item['timestamp']
+        ts = item["timestamp"]
         if ts.minute == 4:
             o = tester.entry(E.Side.BUY, E.ExecutionType.MARKET)
 
@@ -398,8 +401,13 @@ def test_losscut1():
             assert tester.status.order_num == 0
             assert tester.status.position_num == 1
             p = tester.positions()[0]
-            o = tester.exit(p, E.ExecutionType.LIMIT, price=float("inf"), losscur_price=losscut_price)
-            entry_price = item['open']
+            o = tester.exit(
+                p,
+                E.ExecutionType.LIMIT,
+                price=float("inf"),
+                losscur_price=losscut_price,
+            )
+            entry_price = item["open"]
 
         elif ts.minute == 6:
             assert tester.status.order_num == 1
@@ -416,5 +424,5 @@ def test_losscut1():
             assert p.close_order.exec_type == E.ExecutionType.MARKET
             assert p.close_order.status == E.OrderStatus.LOSSCUT
             assert p.open_price == entry_price
-            assert p.close_price == item['low']
-            assert p.gain == item['low'] / entry_price - 1
+            assert p.close_price == item["low"]
+            assert p.gain == item["low"] / entry_price - 1
