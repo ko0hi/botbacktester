@@ -12,7 +12,7 @@ from .utils import DEFAULT_EXPIRE_SECONDS, set_log_level
 
 
 class BackTester:
-    def __init__(self, df, log_level=logging.DEBUG):
+    def __init__(self, df, log_level=logging.INFO):
         assert df.index.name == "timestamp"
         assert isinstance(df.index, pd.DatetimeIndex)
 
