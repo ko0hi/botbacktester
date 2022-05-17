@@ -89,6 +89,16 @@ class Position:
         self.close_item = item
         self.close_order = close_order
 
+    def as_dict(self):
+        d = {}
+        d.update({f'oo_{k}': v for (k, v) in self.open_order.as_dict().items()})
+        if self.close_order is not None:
+            d.update({f'co_{k}': v for (k, v) in self.close_order.as_dict().items()})
+
+        d['gain'] = self.gain
+
+        return d
+
     @property
     def id(self):
         return self._id
@@ -219,6 +229,21 @@ class Order:
             return elapsed_time(self.entry_time, self.executed_at, metric)
         else:
             return None
+
+    def as_dict(self):
+        return {
+            "side": self.side.name,
+            "exec_type": self.exec_type.name,
+            "settle_type": self.settle_type.name,
+            "price": self.price,
+            "size": self.size,
+            "is_executed": self.is_executed,
+            "status": self.status.name,
+            "entried_at": self.entried_at,
+            "executed_at": self.executed_at,
+            "expired_at": self.expired_at,
+            "fee": self.fee
+        }
 
     @property
     def id(self):

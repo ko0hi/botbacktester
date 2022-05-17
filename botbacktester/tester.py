@@ -1,5 +1,6 @@
 from typing import Callable
 
+import numpy as np
 import pandas as pd
 import logging
 
@@ -96,6 +97,20 @@ class BackTester:
 
     def positions(self, side=None, non_closing=False) -> list[Position]:
         return self._status.positions(side, non_closing)
+
+    def get_result_df(self):
+        assert len(self.closed_positions) > 0, "Results not found"
+        df = pd.DataFrame([p.as_dict() for p in self.closed_positions])
+
+        df['timestamp'] = df.oo_entried_at
+        df['side'] = df.oo_side
+        df.set_index("timestamp", inplace=True)
+        df.drop(columns=["oo_settle_type", "co_settle_type"], inplace=True)
+
+        df['gain_buy'] = np.where(df.side == "BUY", df.gain, 0)
+        df['gain_sell'] = np.where(df.side == "SELL", df.gain, 0)
+
+        return df
 
     @property
     def status(self) -> Status:
