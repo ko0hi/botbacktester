@@ -130,7 +130,7 @@ class Order:
         exec_type: ExecutionType,
         settle_type: SettleType,
         *,
-        price: float = None,
+        price: float = -1,
         size: int = 1,
         entry_time: Union["pd.Timestamp", str] = None,
         expire_seconds: int = float("inf"),
@@ -354,7 +354,7 @@ class OpenOrder(Order):
         entry_time,
         side: Side,
         exec_type: ExecutionType,
-        price: float = None,
+        price: float = -1,
         expire_seconds: int = DEFAULT_EXPIRE_SECONDS,
         market_price_key: str = "open",
         market_slippage: int = 0,
@@ -395,7 +395,7 @@ class CloseOrder(Order):
         # 値で待ち続ける。
         # ``expire_seconds``の指定がある場合、``update_fn_or_price_key``に従っ
         # て失効するたびに更新されていく。
-        price: float = None,
+        price: float = -1,
         losscut_price: float = None,
         # entry後から何秒後に失効するか
         expire_seconds: int = DEFAULT_EXPIRE_SECONDS,
