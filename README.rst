@@ -1,0 +1,3 @@
+# BotBackTester
+
+Botバックテスト用ライブラリ。
