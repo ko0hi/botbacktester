@@ -44,7 +44,7 @@ def test_limit1():
             assert tester.status.order_num == 0
             assert tester.status.position_num == 0
             assert tester.status.cum_gain == 0
-            assert len(tester.closed_positions) == 0
+            assert len(tester.position_history) == 0
 
         elif ts.minute == 5:
             # open entry
@@ -61,7 +61,7 @@ def test_limit1():
             assert tester.status.order_num == 1
             assert tester.status.position_num == 0
             assert tester.status.cum_gain == 0
-            assert len(tester.closed_positions) == 0
+            assert len(tester.position_history) == 0
 
             o = orders_[0]
             assert o.entried_at.minute == 5
@@ -81,7 +81,7 @@ def test_limit1():
             assert tester.status.order_num == 1
             assert tester.status.position_num == 0
             assert tester.status.cum_gain == 0
-            assert len(tester.closed_positions) == 0
+            assert len(tester.position_history) == 0
 
             o = orders[0]
             assert o.status == E.OrderStatus.ORDERING
@@ -95,7 +95,7 @@ def test_limit1():
             assert tester.status.order_num == 0
             assert tester.status.position_num == 1
             assert tester.status.cum_gain == 0
-            assert len(tester.closed_positions) == 0
+            assert len(tester.position_history) == 0
 
             p = positions[0]
             o = p.open_order
@@ -118,7 +118,7 @@ def test_limit1():
             assert tester.status.order_num == 1
             assert tester.status.position_num == 1
             assert tester.status.cum_gain == 0
-            assert len(tester.closed_positions) == 0
+            assert len(tester.position_history) == 0
 
             positions_ = tester.positions()
             assert len(positions_) == 1
@@ -142,9 +142,9 @@ def test_limit1():
             assert tester.status.order_num == 0
             assert tester.status.position_num == 0
             assert tester.status.cum_gain == exit_price / entry_price - 1
-            assert len(tester.closed_positions) == 1
+            assert len(tester.position_history) == 1
 
-            p = tester.closed_positions[0]
+            p = tester.position_history[0]
 
             assert p.open_order.entried_at.minute == 5
             assert p.open_order.executed_at.minute == 7
@@ -263,8 +263,8 @@ def test_close_order_expire1():
     assert tester.status.position_num == 0
 
     # 残ったポジションは最終価格で強制決済
-    assert len(tester.closed_positions) == 1
-    p = tester.closed_positions[0]
+    assert len(tester.position_history) == 1
+    p = tester.position_history[0]
     assert p.open_order.entried_at.minute == 4
     assert p.close_order.entried_at.minute == 6
     assert p.close_order.status == E.OrderStatus.EXPIRED_EXECUTED
@@ -299,8 +299,8 @@ def test_no_close_order_position1():
 
     assert tester.status.order_num == 0
     assert tester.status.position_num == 0
-    assert len(tester.closed_positions) == 1
-    p = tester.closed_positions[0]
+    assert len(tester.position_history) == 1
+    p = tester.position_history[0]
     assert p.open_order.entried_at.minute == 4
     assert p.close_order.entried_at.minute == 10  # ここが違う
     assert p.close_order.status == E.OrderStatus.EXECUTED  # ここも違う
@@ -350,8 +350,8 @@ def test_no_close_order_position2():
 
     assert tester.status.order_num == 0
     assert tester.status.position_num == 0
-    assert len(tester.closed_positions) == 1
-    p = tester.closed_positions[0]
+    assert len(tester.position_history) == 1
+    p = tester.position_history[0]
     assert p.open_order.entried_at.minute == 4
     assert p.close_order.entried_at.minute == 10
     assert p.close_order.status == E.OrderStatus.EXECUTED
@@ -417,9 +417,9 @@ def test_losscut1():
             assert tester.status.order_num == 0
             assert tester.status.position_num == 0
 
-            assert len(tester.closed_positions) == 1
+            assert len(tester.position_history) == 1
 
-            p = tester.closed_positions[0]
+            p = tester.position_history[0]
 
             assert p.close_order.exec_type == E.ExecutionType.MARKET
             assert p.close_order.status == E.OrderStatus.LOSSCUT

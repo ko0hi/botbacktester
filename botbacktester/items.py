@@ -8,36 +8,15 @@ import pandas as pd
 from datetime import timedelta
 
 from .enums import Side, ExecutionType, SettleType, OrderStatus
-from .utils import get_logger, DEFAULT_EXPIRE_SECONDS
+from .utils import DEFAULT_EXPIRE_SECONDS, debug_log
 
-ID_COUNTER = itertools.count()
 
 DEBUG = False
 
 
-def enable_debug_print():
-    global DEBUG
-    DEBUG = True
-
-
-def disable_debug_print():
-    global DEBUG
-    DEBUG = False
-
-
-logger = get_logger()
-
-
-def elapsed_time(begin, end, metric="seconds"):
-    delta = (end - begin).seconds
-    if metric == "seconds":
-        return delta
-    elif metric == "minutes":
-        return delta / 60
-    elif metric == "hours":
-        return delta / 3600
-    else:
-        raise RuntimeError(f"Unsupported: {metric}")
+def reset_id_counter():
+    Position.ID_COUNTER = itertools.count()
+    Order.ID_COUNTER = itertools.count()
 
 
 def check_limit(item: dict, side: Side, price: float):
@@ -55,29 +34,20 @@ def check_stop(item: dict, side: Side, price: float):
 
 
 class Position:
+    ID_COUNTER = itertools.count()
+
     def __init__(self, open_order: OpenOrder):
         self.open_order: OpenOrder = open_order
         self.closing_order: CloseOrder = None
         self.close_order: CloseOrder = None
         self.close_item: dict = None
-        self._id = next(ID_COUNTER)
+        self._id = next(Position.ID_COUNTER)
 
     def __repr__(self):
-        if self.close_order is None:
-            return (
-                f"{self.__class__.__name__}("
-                f"id={self.id}/"
-                f"side={self.side}/"
-                f"price={self.open_price})"
-            )
-        else:
-            return (
-                f"{self.__class__.__name__}("
-                f"id={self._id}/"
-                f"side={self.side}/"
-                f"price={self.open_price},{self.close_price}/"
-                f"gain={self.gain:.3f}/)"
-            )
+        return (
+            f"{self.__class__.__name__}({self.id}/{self.side.name}/"
+            f"{self.open_price:.0f}/{self.is_closing}/{self.is_closed})"
+        )
 
     def set_closing_order(self, closing_order: CloseOrder):
         self.closing_order = closing_order
@@ -90,6 +60,8 @@ class Position:
         # 後者の場合、cur・close_orderともに最後のものが入れられる。
         self.close_item = item
         self.close_order = close_order
+
+        debug_log("CLOSED", self)
 
     def as_dict(self):
         d = {}
@@ -148,22 +120,10 @@ class Position:
     def open_item(self):
         return self.open_order.executed_item
 
-    def open_execution_time(self, unit="seconds"):
-        return self.open_order.execution_time(unit)
-
-    def close_execution_time(self, unit="seconds"):
-        if self.is_closed:
-            # 決済された場合は決済注文の約定時間
-            return self.close_order.execution_time(unit)
-        else:
-            # 決済されなかった場合は決済注文の発注時間から最後のseriesまで。
-            return elapsed_time(self.close_order.entry_time, self.close_item.name)
-
-    def total_execution_time(self, unit="seconds"):
-        return elapsed_time(self.open_order.entry_time, self.close_item["timestamp"])
-
 
 class Order:
+    ID_COUNTER = itertools.count()
+
     def __init__(
         self,
         side: Side,
@@ -185,7 +145,7 @@ class Order:
         self._entry_time = None
         self._exec_type_original = exec_type
         self._status = OrderStatus.ORDERING
-        self._id = next(ID_COUNTER)
+        self._id = next(Order.ID_COUNTER)
 
         if entry_time is not None:
             self._set_entry_and_expire_time(entry_time)
@@ -214,22 +174,18 @@ class Order:
         self.market_slippage = market_slippage
 
     def __repr__(self):
-        return (
-            f"{self.__class__.__name__}(id={self._id}/"
-            f"entry_at={self.entried_at}/"
-            f"expired_at={self.expired_at}/"
-            f"price={self.price}/"
-            f"side={self.side}/"
-            f"exec_type={self.exec_type}/"
-            f"executed={self.is_executed}/"
-            f"expired={self.is_expired})"
-        )
+        return f"{self.__class__.__name__}({self._repr()})"
 
-    def execution_time(self, metric="seconds"):
-        if self.is_executed:
-            return elapsed_time(self.entry_time, self.executed_at, metric)
-        else:
-            return None
+    def _repr(self):
+        return (
+            f"{self._id}/"
+            f"{self.status.name}/"
+            f"{self.price:.0f}/"
+            f"{self.side.name}/"
+            f"{self.exec_type.name}/"
+            f"{self.entry_time.strftime('%H:%M:%S')}/"
+            f"{self.expire_time.strftime('%H:%M:%S')}"
+        )
 
     def as_dict(self):
         return {
@@ -331,33 +287,38 @@ class Order:
 
         self._status = OrderStatus.EXECUTED
 
-        logger.debug(f"[EXECUTED ORDER] {item['timestamp']} {self}")
+        debug_log("EXECUTED")
 
     def _expired(self, item: dict):
         self._expired_item = item
         self._status = OrderStatus.EXPIRED
-        logger.debug(f"[EXPIRED ORDER] {item['timestamp']} {self}")
+        debug_log("EXPIRED")
 
     def _check_execution(self, item: dict):
         self._validate_item(item)
 
         if self.exec_type == ExecutionType.MARKET:
             assert item["timestamp"] >= self._entry_time
-            return True
+            rtn = True
 
         elif self.exec_type == ExecutionType.LIMIT:
-            return check_limit(item, self.side, self.price)
+            rtn = check_limit(item, self.side, self.price)
 
         elif self.exec_type == ExecutionType.STOP:
-            return check_stop(item, self.side, self.price)
+            rtn = check_stop(item, self.side, self.price)
 
         else:
             raise RuntimeError
 
+        # debug_log("CHECK EXECUTION", rtn)
+
+        return rtn
+
     def _check_expiration(self, item: dict):
         self._validate_item(item)
-        logger.debug(f"[CHECK EXPIRATION] {item['timestamp']} > {self.expire_time}")
-        return item["timestamp"] >= self.expire_time
+        rtn = item["timestamp"] >= self.expire_time
+        # debug_log("CHECK EXPIRE", f"{rtn} ({item['timestamp']} > {self.expire_time})")
+        return rtn
 
     def _set_entry_and_expire_time(self, entry_time: Union[str, pd.Timestamp]):
         """エントリー時間と失効時間をセットする。
@@ -410,13 +371,16 @@ class OpenOrder(Order):
         )
 
     def _on_step(self, cur: dict):
+        debug_log("STEP (ORDER)", self)
+
         assert not self.is_done, f"Invalid order status: {self.status}"
 
         if self._check_execution(cur):
             self._executed(cur)
+        elif self._check_expiration(cur):
+            self._expired(cur)
         else:
-            if self._check_expiration(cur):
-                self._expired(cur)
+            debug_log("NEXT")
 
 
 class CloseOrder(Order):
@@ -501,7 +465,12 @@ class CloseOrder(Order):
         self._expired_orders = []
         self._keep_expired_orders = keep_expired_orders
 
+    def _repr(self):
+        return super()._repr() + f"/{self.position}"
+
     def _on_step(self, item: dict):
+        debug_log("STEP (ORDER)", self)
+
         assert self._position is not None, "Missing ``position``"
         assert self.entry_time is not None, "Missing ``entry_time``"
 
@@ -510,8 +479,9 @@ class CloseOrder(Order):
                 self._losscut(item)
                 return
 
-        if item["timestamp"] <= self.entry_time:
+        if item["timestamp"] < self.entry_time:
             # entry wait中
+            debug_log("WAITING")
             return
 
         # 約定確認
@@ -572,12 +542,6 @@ class CloseOrder(Order):
         self._executed(item, force_market=True, market_price_key=market_price_key)
         self._status = OrderStatus.EXPIRED_EXECUTED
 
-    def execution_time(self, metric="seconds"):
-        if self.is_executed:
-            return elapsed_time(self._initial_entry_time, self.executed_at, metric)
-        else:
-            return None
-
     @property
     def position(self):
         return self._position
@@ -616,7 +580,7 @@ class CloseOrder(Order):
 
         self._status = OrderStatus.ORDERING
 
-        logger.debug(f"[EXTEND ORDER] {self}")
+        debug_log("EXTEND ORDER")
 
     def __need_force_market_entry(self, item):
         if (

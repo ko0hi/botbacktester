@@ -5,11 +5,16 @@ import pandas as pd
 import tqdm
 import logging
 
-from .items import Position, Order, OpenOrder, CloseOrder
+from .items import Position, Order, OpenOrder, CloseOrder, reset_id_counter
 from .enums import SettleType, ExecutionType
 from .evaluate import evaluation_set1
 from .status import Status
-from .utils import DEFAULT_EXPIRE_SECONDS, set_log_level
+from .utils import (
+    DEFAULT_EXPIRE_SECONDS,
+    debug_log,
+    get_log_level,
+    set_log_level,
+)
 
 
 class BackTester:
@@ -19,21 +24,33 @@ class BackTester:
 
         self._df = df.sort_index().reset_index()
         self._data = self._df.to_dict(orient="records")
-        self._status = Status()
-        self._order_history = []
-        self._closed_positions = []
-
-        self._cur_i = None
+        self._status, self._order_history, self._position_history, self._cur_i = (
+            None,
+            None,
+            None,
+            None,
+        )
 
         set_log_level(log_level)
 
     def start(self):
-        bar = tqdm.trange(0, len(self._data))
+        self.reset()
+
+        iterator = range if get_log_level() == logging.DEBUG else tqdm.trange
+        bar = iterator(0, len(self._data))
+
         for i in bar:
             self._cur_i = i
             self._on_step()
             yield i, self._data[self._cur_i]
         self.__clean_up()
+
+    def reset(self):
+        self._status = Status()
+        self._order_history = []
+        self._position_history = []
+        self._cur_i = None
+        reset_id_counter()
 
     def entry(
         self,
@@ -53,8 +70,11 @@ class BackTester:
             market_price,
             market_slippage,
         )
+        debug_log("ORDER ENTRY", oo)
+
         self._status.add_order(oo)
         self._order_history.append(oo)
+
         return oo
 
     def exit(
@@ -88,19 +108,27 @@ class BackTester:
             force_market_entry_seconds=force_market_entry_seconds,
             keep_expired_orders=keep_expired_orders,
         )
+        debug_log("ORDER EXIT", co)
+
         self._status.add_order(co)
         self._order_history.append(co)
+
         return co
 
     def _on_step(self):
         item = self._data[self._cur_i]
+
+        debug_log("STEP", self.__step_repr())
+        debug_log("ITEM", item)
 
         for o in self._status.orders():
             o._on_step(item)
 
             if isinstance(o, OpenOrder):
                 if o.is_executed:
-                    self._status.add_position(Position(o))
+                    p = Position(o)
+                    self._status.add_position(p)
+                    debug_log("POSITION", p)
 
             elif isinstance(o, CloseOrder):
                 pass
@@ -110,6 +138,8 @@ class BackTester:
 
         self.__update_status()
 
+        debug_log(f"UPDATE STATUS", self.__step_repr())
+
     def orders(self, side=None, settle_type=None, exec_type=None) -> list[Order]:
         return self._status.orders(side, settle_type, exec_type)
 
@@ -117,8 +147,8 @@ class BackTester:
         return self._status.positions(side, non_closing)
 
     def get_result_df(self):
-        assert len(self.closed_positions) > 0, "Results not found"
-        df = pd.DataFrame([p.as_dict() for p in self.closed_positions])
+        assert len(self.position_history) > 0, "Results not found"
+        df = pd.DataFrame([p.as_dict() for p in self.position_history])
 
         df["timestamp"] = df.oo_entried_at
         df["side"] = df.oo_side
@@ -135,6 +165,14 @@ class BackTester:
         evaluation_set1(df_result, **kwargs)
         return df_result
 
+    @classmethod
+    def enable_debug_log(cls):
+        set_log_level("DEBUG")
+
+    @classmethod
+    def disable_debug_log(cls):
+        set_log_level("INFO")
+
     @property
     def status(self) -> Status:
         return self._status
@@ -144,8 +182,8 @@ class BackTester:
         return self._order_history
 
     @property
-    def closed_positions(self) -> list[Position]:
-        return self._closed_positions
+    def position_history(self) -> list[Position]:
+        return self._position_history
 
     def __get_entry_time(self):
         return self._data[self._cur_i]["timestamp"]
@@ -181,4 +219,7 @@ class BackTester:
         closed_positions = self._status.clear_closed_positions()
 
         if len(closed_positions):
-            self._closed_positions += closed_positions
+            self._position_history += closed_positions
+
+    def __step_repr(self):
+        return f"{self._cur_i}/{self._status.order_num}/{self._status.position_num}"

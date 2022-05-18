@@ -5,8 +5,10 @@ import pandas as pd
 # ``pd.to_datetime``が受け付ける値である必要がある
 DEFAULT_EXPIRE_SECONDS = 1e8
 
+
 LOGGER_NAME = "botbacktester"
-LOGGER_FMT = "[%(levelname)-6s %(asctime)s %(name)s] %(message)s"
+# LOGGER_FMT = "[%(levelname)-6s %(asctime)s %(name)s] %(message)s"
+LOGGER_FMT = "[%(levelname)s] %(message)s"
 
 
 def get_logger(level=logging.INFO):
@@ -18,8 +20,19 @@ def get_logger(level=logging.INFO):
     return logger
 
 
+LOGGER = get_logger()
+
+
+def get_log_level():
+    return LOGGER.level
+
+
 def set_log_level(level):
-    logging.getLogger(LOGGER_NAME).setLevel(level)
+    LOGGER.setLevel(level)
+
+
+def debug_log(category, message=""):
+    LOGGER.debug(f"{category:15s} {message}")
 
 
 def resample_candle(df, minute, key=None):
