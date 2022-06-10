@@ -33,7 +33,7 @@ class BackTester:
 
         set_log_level(log_level)
 
-    def start(self):
+    def start(self, stop_i=None):
         self.reset()
 
         iterator = range if get_log_level() == logging.DEBUG else tqdm.trange
@@ -42,8 +42,14 @@ class BackTester:
         for i in bar:
             self._cur_i = i
             self._on_step()
+
+            if stop_i and self._cur_i == stop_i:
+                break
+
             yield i, self._data[self._cur_i]
-        self.__clean_up()
+
+        if stop_i is not None:
+            self.__clean_up()
 
     def reset(self):
         self._status = Status()
@@ -138,7 +144,7 @@ class BackTester:
 
         self.__update_status()
 
-        debug_log(f"UPDATE STATUS", self.__step_repr())
+        debug_log("UPDATE STATUS", self.__step_repr())
 
     def orders(self, side=None, settle_type=None, exec_type=None) -> list[Order]:
         return self._status.orders(side, settle_type, exec_type)
