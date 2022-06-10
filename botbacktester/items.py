@@ -404,7 +404,7 @@ class CloseOrder(Order):
         # ``expire_seconds``の指定がある場合、``update_fn_or_price_key``に従っ
         # て失効するたびに更新されていく。
         price: float = -1,
-        losscut_price: float = None,
+        losscut_price: float = -1,
         # entry後から何秒後に失効するか
         expire_seconds: int = DEFAULT_EXPIRE_SECONDS,
         market_price_key: str = "open",
@@ -482,7 +482,7 @@ class CloseOrder(Order):
         assert self._position is not None, "Missing ``position``"
         assert self.entry_time is not None, "Missing ``entry_time``"
 
-        if self._losscut_price is not None:
+        if self._losscut_price > 0:
             if check_stop(item, self.side, self._losscut_price):
                 self._losscut(item)
                 return

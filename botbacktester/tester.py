@@ -48,7 +48,7 @@ class BackTester:
 
             yield i, self._data[self._cur_i]
 
-        if stop_i is not None:
+        if stop_i is None:
             self.__clean_up()
 
     def reset(self):

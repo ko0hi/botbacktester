@@ -367,7 +367,7 @@ def test_market1():
     for i, item in tester.start():
         if i == 5:
             o = tester.entry(E.Side.BUY, E.ExecutionType.MARKET)
-            assert o.price is None
+            assert o.price == -1
             assert tester.status.position_num == 0
         elif i == 6:
             assert tester.status.position_num == 1
@@ -376,7 +376,7 @@ def test_market1():
 
         elif i == 7:
             o = tester.entry(E.Side.BUY, E.ExecutionType.MARKET, market_slippage=slip)
-            assert o.price is None
+            assert o.price == -1
 
         elif i == 8:
             assert tester.status.position_num == 2
