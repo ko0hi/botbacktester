@@ -9,9 +9,10 @@ package_data = \
 
 install_requires = \
 ['matplotlib>=3.5.2,<4.0.0',
- 'numpy>=1.22.3,<2.0.0',
+ 'numba>=0.55.2,<0.56.0',
+ 'numpy>=1.22.4,<2.0.0',
  'pandas>=1.4.2,<2.0.0',
- 'scipy>=1.8.0,<2.0.0',
+ 'scipy==1.8.0',
  'tqdm>=4.64.0,<5.0.0']
 
 setup_kwargs = {
@@ -27,7 +28,7 @@ setup_kwargs = {
     'packages': packages,
     'package_data': package_data,
     'install_requires': install_requires,
-    'python_requires': '>=3.9,<4.0',
+    'python_requires': '>=3.8,<3.11',
 }
 
 
