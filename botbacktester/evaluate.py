@@ -29,7 +29,11 @@ def win_ratio(df, n=100, name="win_ratio"):
 
 def ls_ratio(df, n=100, name="ls_ratio"):
     assert "side" in df.columns
-    s = pd.Series(np.where(df.side == "BUY", 1, 0), index=df.index, name=name).rolling(n).mean()
+    s = (
+        pd.Series(np.where(df.side == "BUY", 1, 0), index=df.index, name=name)
+        .rolling(n)
+        .mean()
+    )
     return s
 
 

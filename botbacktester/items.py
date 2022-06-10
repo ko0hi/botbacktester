@@ -44,10 +44,15 @@ class Position:
         self._id = next(Position.ID_COUNTER)
 
     def __repr__(self):
-        return (
-            f"{self.__class__.__name__}({self.id}/{self.side.name}/"
-            f"{self.open_price:.0f}/{self.is_closing}/{self.is_closed})"
-        )
+        return f"{self.__class__.__name__}({self.__repr()})"
+
+    def __repr(self):
+        r = f"{self.id}/{self.side.name}/{self.is_closing}/{self.is_closed}/{self.open_price:.0f}"
+
+        if self.is_closed:
+            r += f"/{self.close_price:.0f}/{self.gain:.3f}"
+
+        return r
 
     def set_closing_order(self, closing_order: CloseOrder):
         self.closing_order = closing_order
@@ -79,6 +84,9 @@ class Position:
 
     @property
     def gain(self):
+        if not self.is_closed:
+            return None
+
         gain = self.close_price / self.open_price - 1
 
         if self.open_order.side == Side.SELL:
